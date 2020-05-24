@@ -394,21 +394,50 @@ check_critical_program_versions() {
 }
 
 is_os_supported() {
-    local os_to_check="${1}"
+    local os_to_check os_version the_os valid_version valid_os
+    os_to_check="${1}"
+    os_version="${2}"
+    valid_os=false
+    valid_version=false
     # Strip just the base name of the system using sed
     # shellcheck disable=SC2001
     the_os=$(echo "${os_to_check}" | sed 's/ .*//')
-    # If the variable is one of our supported OSes,
-    case "${the_os}" in
-        # Print it in green
-        "Raspbian") log_write "${TICK} ${COL_GREEN}${os_to_check}${COL_NC}";;
-        "Ubuntu") log_write "${TICK} ${COL_GREEN}${os_to_check}${COL_NC}";;
-        "Fedora") log_write "${TICK} ${COL_GREEN}${os_to_check}${COL_NC}";;
-        "Debian") log_write "${TICK} ${COL_GREEN}${os_to_check}${COL_NC}";;
-        "CentOS") log_write "${TICK} ${COL_GREEN}${os_to_check}${COL_NC}";;
-        # If not, show it in red and link to our software requirements page
-        *) log_write "${CROSS} ${COL_RED}${os_to_check}${COL_NC} (${FAQ_HARDWARE_REQUIREMENTS})";
-    esac
+    # Loop through osnames from supportedos.txt in the repo base directory and determine if detected distro is valid
+    mapfile -t supported_osnames < <(< /etc/.pihole/supportedos.txt cut -d '=' -f1)
+    for i in "${supported_osnames[@]}"
+    do
+        if [[ "${os_to_check}" =~ $i ]]; then
+            valid_os=true
+            break
+        fi
+    done
+
+    # Loop through versions for the detected distro from supportedos.txt in the repo base directory and determine if detected version is valid
+    mapfile -t supported_versions< <(< /etc/.pihole/supportedos.txt grep "${the_os}" | cut -d '=' -f2 | tr "," "\n")
+    for i in "${supported_versions[@]}"
+    do
+        if [[ "${os_version}" =~ $i ]]; then
+            valid_version=true
+            break
+        fi
+    done
+
+    # Display findings back to the user
+    if [ "$valid_os" = true ]; then
+        log_write "${TICK} Distro:  ${COL_GREEN}${the_os}${COL_NC}"
+
+        if [ "$valid_version" = true ]; then
+            log_write "${TICK} Version: ${COL_GREEN}${os_version}${COL_NC}"
+        else
+            log_write "${CROSS} Version: ${COL_RED}${os_version}${COL_NC}"
+            log_write "${CROSS} Error: ${COL_RED}Distro is supported but version is not - please upgrade (${FAQ_HARDWARE_REQUIREMENTS})${COL_NC}"
+        fi
+    else
+        log_write "${CROSS} Distro:  ${COL_RED}${the_os}${COL_NC}"
+        log_write "${CROSS} Error: ${COL_RED}Distribution not supported (${FAQ_HARDWARE_REQUIREMENTS})${COL_NC}"
+    fi
+
+
 }
 
 get_distro_attributes() {
@@ -416,7 +445,7 @@ get_distro_attributes() {
     OLD_IFS="$IFS"
     # Store the distro info in an array and make it global since the OS won't change,
     # but we'll keep it within the function for better unit testing
-    local distro_info
+    local distro_info PRETTY_NAME_VALUE VERSION_ID_VALUE
     #shellcheck disable=SC2016
     IFS=$'\r\n' command eval 'distro_info=( $(cat /etc/*release) )'
 
@@ -425,19 +454,22 @@ get_distro_attributes() {
     # For each line found in an /etc/*release file,
     for distro_attribute in "${distro_info[@]}"; do
         # store the key in a variable
-        local pretty_name_key
-        pretty_name_key=$(echo "${distro_attribute}" | grep "PRETTY_NAME" | cut -d '=' -f1)
+        local key
+        key=$(echo "${distro_attribute}" | cut -d '=' -f1)
         # we need just the OS PRETTY_NAME,
-        if [[ "${pretty_name_key}" == "PRETTY_NAME" ]]; then
+        if [[ "${key}" == "PRETTY_NAME" ]]; then
             # so save in in a variable when we find it
-            PRETTY_NAME_VALUE=$(echo "${distro_attribute}" | grep "PRETTY_NAME" | cut -d '=' -f2- | tr -d '"')
-            # then pass it as an argument that checks if the OS is supported
-            is_os_supported "${PRETTY_NAME_VALUE}"
+            PRETTY_NAME_VALUE=$(echo "${distro_attribute}" | cut -d '=' -f2- | tr -d '"')
+        elif [[ "${key}" == "VERSION_ID" ]]; then
+            VERSION_ID_VALUE=$(echo "${distro_attribute}" | cut -d '=' -f2- | tr -d '"')
         else
             # Since we only need the pretty name, we can just skip over anything that is not a match
             :
         fi
     done
+
+    # then pass it as an argument that checks if the OS is supported
+    is_os_supported "${PRETTY_NAME_VALUE}" "${VERSION_ID_VALUE}"
     # Set the IFS back to what it was
     IFS="$OLD_IFS"
 }
