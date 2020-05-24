@@ -430,11 +430,11 @@ is_os_supported() {
             log_write "${TICK} Version: ${COL_GREEN}${os_version}${COL_NC}"
         else
             log_write "${CROSS} Version: ${COL_RED}${os_version}${COL_NC}"
-            log_write "${CROSS} Error: ${COL_RED}Distro is supported but version is not - please upgrade (${FAQ_HARDWARE_REQUIREMENTS})${COL_NC}"
+            log_write "${CROSS} Error: ${COL_RED}${the_os} is supported but version ${os_version} is currently unsupported (${FAQ_HARDWARE_REQUIREMENTS})${COL_NC}"
         fi
     else
         log_write "${CROSS} Distro:  ${COL_RED}${the_os}${COL_NC}"
-        log_write "${CROSS} Error: ${COL_RED}Distribution not supported (${FAQ_HARDWARE_REQUIREMENTS})${COL_NC}"
+        log_write "${CROSS} Error: ${COL_RED}${the_os} is not a supported distro (${FAQ_HARDWARE_REQUIREMENTS})${COL_NC}"
     fi
 
 
